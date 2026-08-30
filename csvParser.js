@@ -5,8 +5,6 @@
 // Returns: { transactions: [...], warnings: [...] }
 // Each transaction: { id, hash, date, description, amount, balance, category: null, notes: '', source }
 
-import { monthKey } from './budget.js';
-
 /** Canonical YYYY-MM-DD from common UK date strings: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD */
 function parseDate(raw) {
   if (!raw) return null;
