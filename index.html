@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — personal spending</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">£</span>
+      <span class="brand-name">Ledger</span>
+    </div>
+    <nav class="nav">
+      <button class="nav-tab active" data-tab="dashboard"><span class="tab-index">01</span>Dashboard</button>
+      <button class="nav-tab" data-tab="import"><span class="tab-index">02</span>Import</button>
+      <button class="nav-tab" data-tab="transactions"><span class="tab-index">03</span>Transactions</button>
+      <button class="nav-tab" data-tab="budget"><span class="tab-index">04</span>Budget</button>
+      <button class="nav-tab" data-tab="categories"><span class="tab-index">05</span>Categories &amp; Rules</button>
+      <button class="nav-tab" data-tab="settings"><span class="tab-index">06</span>Settings</button>
+    </nav>
+    <button id="key-status-btn" class="key-status">
+      <span id="key-status-dot" class="key-status-dot"></span>
+      <span id="key-status-label">API key not set</span>
+    </button>
+    <div class="sidebar-foot">Stored locally in this browser.<br>Nothing leaves your device except direct calls to Google's API, if you use it.</div>
+  </aside>
+
+  <main class="content">
+
+    <!-- DASHBOARD -->
+    <section id="panel-dashboard" class="tab-panel active">
+      <header class="panel-header">
+        <h1>Dashboard</h1>
+        <p class="subtitle">A running balance sheet of everything you've imported.</p>
+      </header>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <span class="stat-label">Money in</span>
+          <span class="stat-value mono positive" id="stat-income">£0.00</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Money out</span>
+          <span class="stat-value mono negative" id="stat-spend">£0.00</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Net</span>
+          <span class="stat-value mono" id="stat-net">£0.00</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Transactions</span>
+          <span class="stat-value mono" id="stat-count">0</span>
+        </div>
+      </div>
+
+      <div class="chart-row">
+        <div class="chart-card">
+          <h2>By category</h2>
+          <canvas id="category-chart" height="220"></canvas>
+        </div>
+        <div class="chart-card">
+          <h2>By month</h2>
+          <canvas id="trend-chart" height="220"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="insight-head">
+          <h2>Recurring payments</h2>
+          <span class="mono" id="recurring-total"></span>
+        </div>
+        <p class="muted small">Spotted automatically from repeated charges of a similar amount, in at least two different months.</p>
+        <ul id="recurring-list" class="plain-list"></ul>
+      </div>
+
+      <div class="card insight-card">
+        <div class="insight-head">
+          <h2>AI insights</h2>
+          <button id="ai-insight-btn" class="btn-primary">Get AI insights</button>
+        </div>
+        <div id="insight-box" class="hidden">
+          <p id="insight-text" class="insight-text"></p>
+        </div>
+        <p class="muted small">Uses your Google API key from Settings. Sends a category summary only — not individual transactions.</p>
+      </div>
+    </section>
+
+    <!-- IMPORT -->
+    <section id="panel-import" class="tab-panel">
+      <header class="panel-header">
+        <h1>Import a statement</h1>
+        <p class="subtitle">CSV export or PDF statement from Barclays (or most UK banks).</p>
+      </header>
+
+      <div id="drop-zone" class="drop-zone">
+        <div class="perforation"></div>
+        <p class="drop-title">Drop a statement here, or click to choose a file</p>
+        <p class="muted small">.csv, .pdf</p>
+      </div>
+      <input type="file" id="file-input" accept=".csv,.pdf" hidden>
+
+      <div id="import-preview" class="card"></div>
+
+      <div id="import-actions" class="import-actions hidden">
+        <button id="confirm-import" class="btn-primary">Import these transactions</button>
+        <button id="cancel-import" class="btn-secondary">Discard</button>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section id="panel-transactions" class="tab-panel">
+      <header class="panel-header">
+        <h1>Transactions</h1>
+        <p class="subtitle"><span id="txn-uncategorised-count">0</span> uncategorised</p>
+      </header>
+
+      <div class="toolbar">
+        <input type="search" id="txn-search" placeholder="Search descriptions…">
+        <select id="txn-category-filter"><option value="all">All categories</option></select>
+        <select id="txn-month-filter"><option value="all">All months</option></select>
+        <button id="run-rules-btn" class="btn-secondary">Apply rules</button>
+        <button id="ai-categorize-btn" class="btn-primary">Categorise with AI</button>
+      </div>
+      <div class="toolbar">
+        <button id="add-txn-btn" class="btn-secondary">+ Add transaction</button>
+        <button id="export-csv-btn" class="btn-secondary">Export CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="ledger-table">
+          <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="txn-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- BUDGET -->
+    <section id="panel-budget" class="tab-panel">
+      <header class="panel-header">
+        <h1>Budget</h1>
+        <p class="subtitle">Set a monthly target per category and track it against what you've actually spent.</p>
+      </header>
+
+      <div class="toolbar">
+        <select id="budget-month-select"></select>
+        <button id="save-budgets-btn" class="btn-primary">Save budgets</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="ledger-table">
+          <thead><tr><th>Category</th><th>Monthly budget</th><th>Spent</th><th>Remaining</th><th style="width:160px">Progress</th><th>Avg/month</th></tr></thead>
+          <tbody id="budget-table-body"></tbody>
+          <tfoot>
+            <tr class="budget-total-row">
+              <td>Total</td>
+              <td class="mono" id="budget-total-budget"></td>
+              <td class="mono" id="budget-total-spent"></td>
+              <td class="mono" id="budget-total-remaining"></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- CATEGORIES & RULES -->
+    <section id="panel-categories" class="tab-panel">
+      <header class="panel-header">
+        <h1>Categories &amp; rules</h1>
+        <p class="subtitle">Rules run top to bottom whenever you click "Apply rules".</p>
+      </header>
+
+      <div class="two-col">
+        <div class="card">
+          <h2>Categories</h2>
+          <ul id="category-list" class="plain-list"></ul>
+          <div class="inline-form">
+            <input type="text" id="new-category-name" placeholder="New category name">
+            <input type="color" id="new-category-color" value="#1B2A4A">
+            <button id="add-category-btn" class="btn-secondary">Add</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Rules</h2>
+          <ul id="rule-list" class="plain-list"></ul>
+          <div class="inline-form">
+            <input type="text" id="new-rule-match" placeholder="Text to match, e.g. 'tesco'">
+            <select id="new-rule-category"></select>
+            <button id="add-rule-btn" class="btn-secondary">Add</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="panel-settings" class="tab-panel">
+      <header class="panel-header">
+        <h1>Settings</h1>
+      </header>
+
+      <div class="card">
+        <h2>Google API key</h2>
+        <p class="muted small">Used for AI categorisation and insights. Stored only in this browser's local database — never uploaded anywhere by this app.</p>
+        <p class="small"><span id="settings-key-status">Not set</span></p>
+        <button id="open-key-modal-btn" class="btn-secondary">Update key</button>
+      </div>
+
+      <div class="card">
+        <h2>Backup</h2>
+        <p class="muted small">Export everything to a JSON file, or restore from one.</p>
+        <label class="checkbox-row"><input type="checkbox" id="include-key-checkbox"> Include API key in export</label>
+        <div class="inline-form">
+          <button id="export-btn" class="btn-secondary">Download backup</button>
+        </div>
+        <div class="inline-form">
+          <label class="checkbox-row"><input type="checkbox" id="merge-import-checkbox"> Merge instead of replace</label>
+        </div>
+        <div class="inline-form">
+          <label for="import-backup-input" class="btn-secondary file-label">Restore from backup file</label>
+          <input type="file" id="import-backup-input" accept=".json" hidden>
+        </div>
+      </div>
+
+      <div class="card danger-card">
+        <h2>Danger zone</h2>
+        <p class="muted small">Permanently deletes all transactions, categories and rules from this browser.</p>
+        <button id="clear-data-btn" class="btn-danger">Clear all data</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="key-modal-backdrop" class="modal-backdrop hidden">
+  <div class="modal" role="dialog" aria-labelledby="key-modal-title">
+    <h2 id="key-modal-title">Google API key</h2>
+    <p class="muted small">
+      Bring your own key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+      It's stored locally in this browser and sent straight to Google when you use an AI feature — never through any other server.
+    </p>
+    <div class="inline-form">
+      <input type="password" id="key-modal-input" placeholder="Paste your API key">
+      <button id="key-modal-toggle-visibility" class="btn-secondary" type="button" title="Show/hide">👁</button>
+    </div>
+    <p id="key-modal-message" class="small hidden"></p>
+    <div class="modal-actions">
+      <button id="key-modal-test" class="btn-secondary">Test</button>
+      <button id="key-modal-remove" class="btn-secondary">Remove key</button>
+      <button id="key-modal-save" class="btn-primary">Save</button>
+      <button id="key-modal-cancel" class="btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="add-txn-backdrop" class="modal-backdrop hidden">
+  <div class="modal" role="dialog" aria-labelledby="add-txn-title">
+    <h2 id="add-txn-title">Add a transaction</h2>
+    <p class="muted small">For cash spending or anything that won't show up in a statement import.</p>
+    <div class="modal-form-grid">
+      <label>Date<input type="date" id="add-txn-date"></label>
+      <label>Amount<input type="number" step="0.01" id="add-txn-amount" placeholder="-12.50 for spend, 12.50 for income"></label>
+      <label class="full">Description<input type="text" id="add-txn-desc" placeholder="e.g. Coffee with Sam"></label>
+      <label class="full">Category
+        <select id="add-txn-category"></select>
+      </label>
+      <label class="full">Notes (optional)<input type="text" id="add-txn-notes"></label>
+    </div>
+    <div class="modal-actions">
+      <button id="add-txn-save" class="btn-primary">Add</button>
+      <button id="add-txn-cancel" class="btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Third-party libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
